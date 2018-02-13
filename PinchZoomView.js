@@ -1,132 +1,136 @@
-/**
- * Copyright (c) 2017-present, Wonday (@wonday.org)
- * All rights reserved.
- *
- * This source code is licensed under the MIT-style license found in the
- * LICENSE file in the root directory of this source tree.
- */
-
-'use strict';
-import React, {Component} from 'react';
+import React from 'react';
 import PropTypes from 'prop-types';
-import {
-    View,
-    StyleSheet,
-    PanResponder
-} from 'react-native';
+import { ScrollView } from 'react-native';
 
-export default class PinchZoomView extends Component {
+class PinchZoomView extends React.Component {
+  state = {
+    lastTouchStartNativeEvent: {},
+    lastTouchEndTimestamp: 0,
+    lastZoomActionTimestamp: 0,
+    isZoomed: false,
+  };
 
-    static propTypes = {
-        ...View.propTypes,
-        scalable: PropTypes.bool,
-        onScaleChanged: PropTypes.func,
-    };
+  onScroll = (e) => {
+    this.props.onScrollOrZoom(e);
+    this.setState({ isZoomed: e.nativeEvent.zoomScale > 1 });
+  };
 
-    static defaultProps = {
-        scalable: true,
-        onScaleChanged: (scale) => {
-        },
-    };
+  onTouchStart = (e) => {
+    if (this.isMultiTouch(e)) return;
 
-    constructor(props) {
+    this.setState({ lastTouchStartNativeEvent: e.nativeEvent });
+  };
 
-        super(props);
-        this.state = {};
-        this.distant = 0;
+  onTouchEnd = (e) => {
+    const { timestamp } = e.nativeEvent;
+    const { zoomInTrigger, zoomOutTrigger } = this.props;
 
-    }
+    const trigger = this.state.isZoomed ? zoomOutTrigger : zoomInTrigger;
+    const actionToPerform = this.state.isZoomed ? this.zoomOut : this.zoomIn;
 
-    componentWillMount() {
+    if (this.isLongPress(e) || this.isMoving(e) || this.isMultiTouch(e)) return;
 
-        this.gestureHandlers = PanResponder.create({
-            onStartShouldSetPanResponder: this._handleStartShouldSetPanResponder,
-            onMoveShouldSetResponderCapture: (evt, gestureState) => (true),
-            onMoveShouldSetPanResponder: this._handleMoveShouldSetPanResponder,
-            onPanResponderGrant: this._handlePanResponderGrant,
-            onPanResponderMove: this._handlePanResponderMove,
-            onPanResponderRelease: this._handlePanResponderEnd,
-            onPanResponderTerminationRequest: evt => false,
-            onPanResponderTerminate: this._handlePanResponderTerminate,
-            onShouldBlockNativeResponder: evt => true
-        });
+    // switch (trigger) {
+    //   case 'singletap':
+    //     actionToPerform(e);
+    //     break;
+    //   case 'doubletap':
+    //     if (this.isSecondTap(e)) actionToPerform(e);
+    //     break;
+    //   default:
+    // }
 
-    }
+    this.setState({ lastTouchEndTimestamp: timestamp });
+  };
 
-    _handleStartShouldSetPanResponder = (e, gestureState) => {
+  zoomIn = (e) => {
+    const { locationX: x, locationY: y, timestamp } = e.nativeEvent;
+    const coords = { x, y, width: 0, height: 0 };
 
-        // don't respond to single touch to avoid shielding click on child components
-        return false;
+    if (this.isAlreadyZooming(e)) return;
 
-    };
+    this.scrollView.scrollResponderZoomTo(coords);
+    this.setState({ lastZoomActionTimestamp: timestamp });
+  };
 
-    _handleMoveShouldSetPanResponder = (e, gestureState) => {
+  zoomOut = (e) => {
+    const { locationX: x, locationY: y, timestamp } = e.nativeEvent;
+    const coords = { x, y, width: 10000, height: 10000 };
 
-        return this.props.scalable && (e.nativeEvent.changedTouches.length>=2 || gestureState.numberActiveTouches >= 2);
+    if (this.isAlreadyZooming(e)) return;
 
-    };
+    this.scrollView.scrollResponderZoomTo(coords);
+    this.setState({ lastZoomActionTimestamp: timestamp });
+  };
 
-    _handlePanResponderGrant = (e, gestureState) => {
+  isSecondTap = (e) => {
+    const { timestamp } = e.nativeEvent;
 
-        if (e.nativeEvent.changedTouches.length>=2 || gestureState.numberActiveTouches >= 2) {
-            let dx = Math.abs(e.nativeEvent.touches[0].pageX - e.nativeEvent.touches[1].pageX);
-            let dy = Math.abs(e.nativeEvent.touches[0].pageY - e.nativeEvent.touches[1].pageY);
-            this.distant = Math.sqrt(dx * dx + dy * dy);
-            this.props.onScaleChanged(1);
-        }
+    return timestamp - this.state.lastTouchEndTimestamp <= 300;
+  };
 
-    };
+  isLongPress = (e) => {
+    console.log('e', e.nativeEvent);
+    const { timestamp } = e.nativeEvent;
+    const { timestamp: lastTimestamp } = this.state.lastTouchStartNativeEvent;
 
-    _handlePanResponderEnd = (e, gestureState) => {
+    return timestamp - lastTimestamp >= 300;
+  };
 
-        this.distant = 0;
+  isMoving = (e) => {
+    const { locationX, locationY } = e.nativeEvent;
+    const { locationX: lastLocationX, locationY: lastLocationY } = this.state.lastTouchStartNativeEvent;
 
-    };
+    return locationX !== lastLocationX && locationY !== lastLocationY;
+  };
 
-    _handlePanResponderTerminate = (e, gestureState) => {
+  isMultiTouch = ({ nativeEvent: { touches } }) => touches.length > 1;
 
-        this.distant = 0;
+  isAlreadyZooming = (e) => {
+    const { timestamp } = e.nativeEvent;
 
-    };
+    return timestamp - this.state.lastZoomActionTimestamp <= 500;
+  };
 
-    _handlePanResponderMove = (e, gestureState) => {
-
-        if ((e.nativeEvent.changedTouches.length>=2 || gestureState.numberActiveTouches >= 2) && this.distant >100) {
-
-            let dx = Math.abs(e.nativeEvent.touches[0].pageX - e.nativeEvent.touches[1].pageX);
-            let dy = Math.abs(e.nativeEvent.touches[0].pageY - e.nativeEvent.touches[1].pageY);
-            let distant = Math.sqrt(dx * dx + dy * dy);
-            let scale = (distant / this.distant);
-
-            // for zoom smooth
-            if (scale > 1.1) scale = 1.1;
-            if (scale < 0.9) scale = 0.9;
-            if (scale>1.05 || scale<0.95) {
-                this.props.onScaleChanged(scale, {x:(e.nativeEvent.touches[0].locationX+e.nativeEvent.touches[1].locationX)/2, y:(e.nativeEvent.touches[0].locationY+e.nativeEvent.touches[1].locationY)/2});
-                this.distant = distant;
-            }
-        }
-
-    };
-
-    render() {
-
-        return (
-            <View
-                {...this.props}
-                {...this.gestureHandlers.panHandlers}
-                style={[styles.container, this.props.style]}>
-                {this.props.children}
-            </View>
-        );
-
-    }
+  render() {
+    return (
+      <ScrollView
+        ref={(ref) => { this.scrollView = ref; }}
+        onLayout={this.props.onLayout}
+        onScroll={this.onScroll}
+        onTouchStart={this.onTouchStart}
+        onTouchEnd={this.onTouchEnd}
+        scrollEventThrottle={100}
+        scrollsToTop={false}
+        alwaysBounceVertical={false}
+        alwaysBounceHorizontal={false}
+        automaticallyAdjustContentInsets={false}
+        showsHorizontalScrollIndicator={false}
+        showsVerticalScrollIndicator={false}
+        maximumZoomScale={this.props.zoomScale}
+        // centerContent
+      >
+        {this.props.children}
+      </ScrollView>
+    );
+  }
 }
 
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center'
-    }
-});
+PinchZoomView.propTypes = {
+  children: PropTypes.element.isRequired,
+  onLayout: PropTypes.func,
+  onScrollOrZoom: PropTypes.func,
+  zoomScale: PropTypes.number,
+  zoomInTrigger: PropTypes.oneOf(['singletap', 'doubletap', 'longpress']),
+  zoomOutTrigger: PropTypes.oneOf(['singletap', 'doubletap', 'longpress']),
+};
+
+PinchZoomView.defaultProps = {
+  onLayout: () => {},
+  onScrollOrZoom: () => {},
+  zoomScale: 4,
+  zoomInTrigger: 'doubletap',
+  zoomOutTrigger: 'singletap',
+};
+
+export default PinchZoomView;

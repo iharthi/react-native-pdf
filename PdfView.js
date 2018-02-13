@@ -9,7 +9,6 @@
 'use strict';
 import React, {Component} from 'react';
 import {FlatList, View, StyleSheet} from 'react-native';
-
 import PropTypes from 'prop-types';
 
 import PdfManager from './PdfManager';
@@ -216,9 +215,7 @@ export default class PdfView extends Component {
     _renderItem = ({item, index}) => {
 
         return (
-            <DoubleTapView style={{flexDirection: this.props.horizontal ? 'row' : 'column'}}
-                onSingleTap={this._onSingleTap(index)}
-                onDoubleTap={this._onDoubleTap(index)}
+            <View style={{flexDirection: this.props.horizontal ? 'row' : 'column'}}
             >
                 <PdfPageView
                     key={item.id}
@@ -228,7 +225,7 @@ export default class PdfView extends Component {
                     height={this._getPageHeight()}
                 />
                 {(index !== this.state.numberOfPages - 1) && this._renderSeparator()}
-            </DoubleTapView>
+            </View>
         );
 
     };
@@ -296,7 +293,7 @@ export default class PdfView extends Component {
                 /*initialScrollIndex={this.props.page - 1}*/ /* not action? */
                 onViewableItemsChanged={this._onViewableItemsChanged}
                 viewabilityConfig={VIEWABILITYCONFIG}
-                onScroll={this._onScroll}
+                // onScroll={this._onScroll}
                 scrollEnabled={this.state.scrollEnabled}
             />
         );
@@ -315,14 +312,17 @@ export default class PdfView extends Component {
 
     render() {
 
+        if (!this.state.pdfLoaded) {
+            return <View/>
+        }
+
         return (
-            <PinchZoomView
-                style={styles.container}
-                onLayout={this._onLayout}
-                onScaleChanged={this._onScaleChanged}
-            >
-                {this.state.pdfLoaded && this._renderList()}
-            </PinchZoomView>
+                <PinchZoomView
+                    style={styles.container}
+                    onLayout={this._onLayout}
+                >
+                    {this._renderList()}
+                </PinchZoomView>
         );
 
     }
